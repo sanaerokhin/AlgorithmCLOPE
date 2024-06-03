@@ -31,10 +31,13 @@ public class Application implements CommandLineRunner {
             if (!future.isDone()) {
                 System.out.println("You can stop calculation by enter command stop");
             } else {
-                System.out.println("Enter command: (import data / initialization / iteration / print / clear / stop / exit)");
+                System.out.println("Enter command: (runAll / import data / initialization / iteration / print / recovery data / clear / stop / exit)");
             }
             String command = scanner.nextLine().trim();
             switch (command) {
+                case "runAll":
+                    handleRunAll(scanner);
+                    break;
                 case "import data":
                     handleImportData(scanner);
                     break;
@@ -50,6 +53,9 @@ public class Application implements CommandLineRunner {
                 case "clear":
                     handleClear();
                     break;
+                case "recovery data":
+                    handleRecovery();
+                    break;
                 case "stop":
                     handleStopByUser();
                     break;
@@ -62,7 +68,36 @@ public class Application implements CommandLineRunner {
         }
     }
 
+    private void handleRunAll(Scanner scanner) {
+        long start = System.currentTimeMillis();
+        if (!future.isDone()) {
+            System.out.println("Calculation is running");
+        } else {
+            System.out.println("Enter absolute file path or press enter to use default:");
+            String filePath = scanner.nextLine().trim();
+            transactionService.setStoppedByUser(false);
+            System.out.println("Enter repulsion parameter (r):");
+            double r = Double.parseDouble(scanner.nextLine().trim());
+            System.out.println("Enter calculation error parameter:");
+            double c = Double.parseDouble(scanner.nextLine().trim());
+            future = CompletableFuture.runAsync(() -> {
+                System.out.println("importing running");
+                if (filePath.isEmpty()) {
+                    dataImportService.importData();
+                } else {
+                    dataImportService.importData(filePath);
+                }
+                System.out.println("importing complete");
+                System.out.println("iteration running");
+                transactionService.iteration(r, c);
+                System.out.println("iteration complete");
+                System.out.println("Running time " + (System.currentTimeMillis() - start));
+            });
+        }
+    }
+
     private void handleImportData(Scanner scanner) {
+        long start = System.currentTimeMillis();
         if (!future.isDone()) {
             System.out.println("Calculation is running");
         } else {
@@ -74,7 +109,7 @@ public class Application implements CommandLineRunner {
             } else {
                 dataImportService.importData(filePath);
             }
-            System.out.println("importing complete");
+            System.out.println("importing complete in " + (System.currentTimeMillis() - start));
         }
     }
 
@@ -133,6 +168,15 @@ public class Application implements CommandLineRunner {
         } else {
             transactionService.clear();
             System.out.println("clearing complete");
+        }
+    }
+
+    private void handleRecovery() {
+        if (!future.isDone()) {
+            System.out.println("Recovering is running");
+        } else {
+            transactionService.recoveryData();
+            System.out.println("Recovering complete");
         }
     }
 

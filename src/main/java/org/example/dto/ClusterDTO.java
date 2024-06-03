@@ -2,9 +2,10 @@ package org.example.dto;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.example.model.Transaction;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 @Getter
 @Setter
@@ -36,33 +37,25 @@ public class ClusterDTO {
         transactionsCount = 0;
     }
 
-    public void addTransaction(Transaction transaction) {
+    public synchronized void addTransactionDTO(TransactionDTO transactionDTO) {
         transactionsCount++;
-        transaction.setClusterId(clusterId);
-        String[] elements = transaction.getElements().split(",");
-        for (int i = 0; i < elements.length; i++) {
-            if (!elements[i].equals("?")) {
-                ElementDTO elementDTO = ElementDTO.findElementDTO(i, elements[i]);
-                elementDTOsMap.compute(elementDTO, (key, value) -> value == null ? 1 : value + 1);
-            }
-        }
+        transactionDTO.setClusterId(clusterId);
+        transactionDTO.getElementDTOList().stream().filter(Objects::nonNull).forEach(elementDTO -> {
+            elementDTOsMap.compute(elementDTO, (key, value) -> value == null ? 1 : value + 1);
+        });
     }
 
-    public void removeTransaction(Transaction transaction) {
+    public synchronized void removeTransactionDTO(TransactionDTO transactionDTO) {
         transactionsCount--;
         if (transactionsCount <= 0) {
             ClusterDTO.remove(this);
             return;
         }
-        String[] elements = transaction.getElements().split(",");
-        for (int i = 0; i < elements.length; i++) {
-            if (!elements[i].equals("?")) {
-                ElementDTO elementDTO = ElementDTO.findElementDTO(i, elements[i]);
-                elementDTOsMap.compute(elementDTO, (key, value) -> (value == null || value == 1) ? null : value - 1);
-            }
-        }
-
+        transactionDTO.getElementDTOList().stream().filter(Objects::nonNull).forEach(elementDTO -> {
+            elementDTOsMap.compute(elementDTO, (key, value) -> (value == null || value == 1) ? null : value - 1);
+        });
     }
+
     public int getUniqueElementsCount() {
         return elementDTOsMap.keySet().size();
     }
@@ -78,5 +71,4 @@ public class ClusterDTO {
     public Integer getOcc(ElementDTO elementDTO){
         return elementDTOsMap.get(elementDTO);
     }
-
 }

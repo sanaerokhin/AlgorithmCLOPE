@@ -3,8 +3,11 @@ package org.example.dto;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @Setter
@@ -14,7 +17,7 @@ public class ElementDTO {
     private String elementValue;
 
     @Getter
-    private static final HashSet<ElementDTO> ELEMENT_DTOS = new HashSet<>();
+    private static final List<ElementDTO> ELEMENT_DTOS = new ArrayList<>();
 
     public ElementDTO(Integer elementNumber, String elementValue) {
         this.elementNumber = elementNumber;

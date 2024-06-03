@@ -3,33 +3,37 @@ package org.example.utils;
 import lombok.RequiredArgsConstructor;
 import org.example.dto.ClusterDTO;
 import org.example.dto.ElementDTO;
-import org.example.model.Transaction;
+import org.example.dto.TransactionDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
 public class AlgorithmCLOPE {
 
-    public void putTransactionInCluster(Transaction transaction, Double repulsion) {
+    public int putTransactionInCluster(TransactionDTO transactionDTO, Double repulsion) {
         ClusterDTO bestCluster = null;
         double bestDeltaAdd;
-        bestDeltaAdd = - Double.MAX_VALUE;
-        ClusterDTO.findById(transaction.getClusterId()).ifPresent(clusterDTO -> clusterDTO.removeTransaction(transaction));
+        bestDeltaAdd = -Double.MAX_VALUE;
+        Optional<ClusterDTO> optional = ClusterDTO.findById(transactionDTO.getClusterId());
+        optional.ifPresent(clusterDTO -> clusterDTO.removeTransactionDTO(transactionDTO));
         for (ClusterDTO clusterDTO : ClusterDTO.getClusterDTOS()) {
-            double deltaAdd = deltaAdd(clusterDTO, transaction, repulsion);
+            double deltaAdd = deltaAdd(clusterDTO, transactionDTO, repulsion);
             if (deltaAdd > 0 && deltaAdd > bestDeltaAdd && (!clusterDTO.equals(bestCluster))) {
                 bestDeltaAdd = deltaAdd;
                 bestCluster = clusterDTO;
             }
         }
-        double newDeltaAdd = deltaAdd(transaction, repulsion);
+        double newDeltaAdd = deltaAdd(transactionDTO, repulsion);
         if (bestCluster == null || newDeltaAdd > bestDeltaAdd) {
             bestCluster = new ClusterDTO();
         }
-        bestCluster.addTransaction(transaction);
-        transaction.setClusterId(bestCluster.getClusterId());
+        bestCluster.addTransactionDTO(transactionDTO);
+        return bestCluster.getClusterId();
     }
 
     public Double calculateGlobalProfit(Double repulsion) {
@@ -46,26 +50,26 @@ public class AlgorithmCLOPE {
         return d1 / d2;
     }
 
-    public Double deltaAdd(ClusterDTO clusterDTO, Transaction transaction, Double repulsion) {
-        int transactionElementsCount = transaction.getElements().replaceAll(",", "").replaceAll("\\?", "").length();
-        int newArea = clusterDTO.getArea() + transactionElementsCount;
+    public Double deltaAdd(ClusterDTO clusterDTO, TransactionDTO transactionDTO, Double repulsion) {
+        List<ElementDTO> elementDTOList = transactionDTO.getElementDTOList();
         int newWidth = clusterDTO.getUniqueElementsCount();
-        String[] elements = transaction.getElements().split(",");
-        for (int i = 0; i < elements.length; i++) {
-            if (!elements[i].equals("?")) {
-                ElementDTO newElementDTO = ElementDTO.findElementDTO(i, elements[i]);
-                if (!clusterDTO.getElementDTOsMap().containsKey(newElementDTO)) {
+        int transactionElementsCount = 0;
+        for (ElementDTO elementDTO : elementDTOList) {
+            if (elementDTO != null) {
+                transactionElementsCount++;
+                if (!clusterDTO.getElementDTOsMap().containsKey(elementDTO)) {
                     newWidth++;
                 }
             }
         }
+        int newArea = clusterDTO.getArea() + transactionElementsCount;
         double d1 = newArea * (clusterDTO.getTransactionsCount() + 1) / Math.pow(newWidth, repulsion);
         double d2 = clusterDTO.getArea() * clusterDTO.getTransactionsCount() / Math.pow(clusterDTO.getUniqueElementsCount(), repulsion);
         return d1 - d2;
     }
 
-    public Double deltaAdd(Transaction transaction, Double repulsion) {
-        int newArea = transaction.getElements().replaceAll(",", "").replaceAll("\\?", "").length();
+    public Double deltaAdd(TransactionDTO transactionDTO, Double repulsion) {
+        long newArea = transactionDTO.getElementDTOList().stream().filter(Objects::nonNull).count();
         return newArea / Math.pow(newArea, repulsion);
     }
 }

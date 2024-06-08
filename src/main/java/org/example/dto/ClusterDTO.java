@@ -4,25 +4,24 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 @Getter
 @Setter
-public class ClusterDTO {
+public class ClusterDTO implements Comparable<ClusterDTO> {
 
-    @Getter
     @Setter
+    @Getter
     private static Integer clustersCount = 0;
     @Getter
     @Setter
-    private static Set<ClusterDTO> clusterDTOS = new HashSet<>();
+    private static Set<ClusterDTO> clusterDTOS = new ConcurrentSkipListSet<>();
 
     private Integer clusterId;
     private Integer transactionsCount;
     private final Map<ElementDTO, Integer> elementDTOsMap = new HashMap<>();
 
-    public static Optional<ClusterDTO> findById(Integer id) {
+    public synchronized static Optional<ClusterDTO> findById(Integer id) {
         return clusterDTOS.stream().filter(clusterDTO -> clusterDTO.getClusterId().equals(id)).findFirst();
     }
 
@@ -32,17 +31,18 @@ public class ClusterDTO {
 
     public ClusterDTO() {
         clustersCount++;
-        clusterDTOS.add(this);
         clusterId = clustersCount;
         transactionsCount = 0;
+        clusterDTOS.add(this);
     }
 
     public synchronized void addTransactionDTO(TransactionDTO transactionDTO) {
         transactionsCount++;
         transactionDTO.setClusterId(clusterId);
-        transactionDTO.getElementDTOList().stream().filter(Objects::nonNull).forEach(elementDTO -> {
-            elementDTOsMap.compute(elementDTO, (key, value) -> value == null ? 1 : value + 1);
-        });
+        transactionDTO.getElementDTOList()
+                .stream()
+                .filter(Objects::nonNull)
+                .forEach(elementDTO -> elementDTOsMap.compute(elementDTO, (key, value) -> value == null ? 1 : value + 1));
     }
 
     public synchronized void removeTransactionDTO(TransactionDTO transactionDTO) {
@@ -51,9 +51,10 @@ public class ClusterDTO {
             ClusterDTO.remove(this);
             return;
         }
-        transactionDTO.getElementDTOList().stream().filter(Objects::nonNull).forEach(elementDTO -> {
-            elementDTOsMap.compute(elementDTO, (key, value) -> (value == null || value == 1) ? null : value - 1);
-        });
+        transactionDTO.getElementDTOList()
+                .stream()
+                .filter(Objects::nonNull)
+                .forEach(elementDTO -> elementDTOsMap.compute(elementDTO, (key, value) -> (value == null || value == 1) ? null : value - 1));
     }
 
     public int getUniqueElementsCount() {
@@ -70,5 +71,10 @@ public class ClusterDTO {
 
     public Integer getOcc(ElementDTO elementDTO){
         return elementDTOsMap.get(elementDTO);
+    }
+
+    @Override
+    public int compareTo(ClusterDTO o) {
+        return clusterId.compareTo(o.getClusterId());
     }
 }

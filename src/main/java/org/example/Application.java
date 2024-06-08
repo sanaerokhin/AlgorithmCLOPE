@@ -31,11 +31,11 @@ public class Application implements CommandLineRunner {
             if (!future.isDone()) {
                 System.out.println("You can stop calculation by enter command stop");
             } else {
-                System.out.println("Enter command: (runAll / import data / initialization / iteration / print / recovery data / clear / stop / exit)");
+                System.out.println("Enter command: (run all / import data / initialization / iteration / print / recovery data / clear / stop / exit)");
             }
             String command = scanner.nextLine().trim();
             switch (command) {
-                case "runAll":
+                case "run all":
                     handleRunAll(scanner);
                     break;
                 case "import data":
@@ -69,7 +69,6 @@ public class Application implements CommandLineRunner {
     }
 
     private void handleRunAll(Scanner scanner) {
-        long start = System.currentTimeMillis();
         if (!future.isDone()) {
             System.out.println("Calculation is running");
         } else {
@@ -81,23 +80,25 @@ public class Application implements CommandLineRunner {
             System.out.println("Enter calculation error parameter:");
             double c = Double.parseDouble(scanner.nextLine().trim());
             future = CompletableFuture.runAsync(() -> {
+                transactionService.clearAll();
+                System.out.println("clearing complete");
                 System.out.println("importing running");
+                long start = System.currentTimeMillis();
                 if (filePath.isEmpty()) {
                     dataImportService.importData();
                 } else {
                     dataImportService.importData(filePath);
                 }
-                System.out.println("importing complete");
+                long importing = System.currentTimeMillis() - start;
+                System.out.println("importing complete in " + importing + " millis");
                 System.out.println("iteration running");
                 transactionService.iteration(r, c);
-                System.out.println("iteration complete");
-                System.out.println("Running time " + (System.currentTimeMillis() - start));
+                System.out.println("iteration complete in " + (System.currentTimeMillis() - start - importing) + " millis");
             });
         }
     }
 
     private void handleImportData(Scanner scanner) {
-        long start = System.currentTimeMillis();
         if (!future.isDone()) {
             System.out.println("Calculation is running");
         } else {
@@ -109,7 +110,7 @@ public class Application implements CommandLineRunner {
             } else {
                 dataImportService.importData(filePath);
             }
-            System.out.println("importing complete in " + (System.currentTimeMillis() - start));
+            System.out.println("importing complete");
         }
     }
 

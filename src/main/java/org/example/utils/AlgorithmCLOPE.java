@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 @Component
@@ -19,11 +18,10 @@ public class AlgorithmCLOPE {
         ClusterDTO bestCluster = null;
         double bestDeltaAdd;
         bestDeltaAdd = -Double.MAX_VALUE;
-        Optional<ClusterDTO> optional = ClusterDTO.findById(transactionDTO.getClusterId());
-        optional.ifPresent(clusterDTO -> clusterDTO.removeTransactionDTO(transactionDTO));
+        ClusterDTO.findById(transactionDTO.getClusterId()).ifPresent(clusterDTO -> clusterDTO.removeTransactionDTO(transactionDTO));
         for (ClusterDTO clusterDTO : ClusterDTO.getClusterDTOS()) {
             double deltaAdd = deltaAdd(clusterDTO, transactionDTO, repulsion);
-            if (deltaAdd > 0 && deltaAdd > bestDeltaAdd && (!clusterDTO.equals(bestCluster))) {
+            if (deltaAdd > bestDeltaAdd) {
                 bestDeltaAdd = deltaAdd;
                 bestCluster = clusterDTO;
             }
@@ -51,21 +49,23 @@ public class AlgorithmCLOPE {
     }
 
     public Double deltaAdd(ClusterDTO clusterDTO, TransactionDTO transactionDTO, Double repulsion) {
-        List<ElementDTO> elementDTOList = transactionDTO.getElementDTOList();
-        int newWidth = clusterDTO.getUniqueElementsCount();
-        int transactionElementsCount = 0;
-        for (ElementDTO elementDTO : elementDTOList) {
-            if (elementDTO != null) {
-                transactionElementsCount++;
-                if (!clusterDTO.getElementDTOsMap().containsKey(elementDTO)) {
-                    newWidth++;
+        synchronized (clusterDTO) {
+            List<ElementDTO> elementDTOList = transactionDTO.getElementDTOList();
+            int newWidth = clusterDTO.getUniqueElementsCount();
+            int transactionElementsCount = 0;
+            for (ElementDTO elementDTO : elementDTOList) {
+                if (elementDTO != null) {
+                    transactionElementsCount++;
+                    if (!clusterDTO.getElementDTOsMap().containsKey(elementDTO)) {
+                        newWidth++;
+                    }
                 }
             }
+            int newArea = clusterDTO.getArea() + transactionElementsCount;
+            double d1 = newArea * (clusterDTO.getTransactionsCount() + 1) / Math.pow(newWidth, repulsion);
+            double d2 = clusterDTO.getArea() * clusterDTO.getTransactionsCount() / Math.pow(clusterDTO.getUniqueElementsCount(), repulsion);
+            return d1 - d2;
         }
-        int newArea = clusterDTO.getArea() + transactionElementsCount;
-        double d1 = newArea * (clusterDTO.getTransactionsCount() + 1) / Math.pow(newWidth, repulsion);
-        double d2 = clusterDTO.getArea() * clusterDTO.getTransactionsCount() / Math.pow(clusterDTO.getUniqueElementsCount(), repulsion);
-        return d1 - d2;
     }
 
     public Double deltaAdd(TransactionDTO transactionDTO, Double repulsion) {

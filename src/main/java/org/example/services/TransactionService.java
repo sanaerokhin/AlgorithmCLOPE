@@ -13,67 +13,79 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
 public class TransactionService {
 
-    //TODO
-    private static final int PAGE_SIZE = 10000;
+    private static final int PAGE_SIZE = 2000;
 
     private final TransactionRepository transactionRepository;
     private final AlgorithmCLOPE algorithmCLOPE;
     @Setter
     private boolean stoppedByUser = false;
-    private Transaction transaction;
 
     public void initialization(double repulsion) {
-        if (transaction == null) {
-            Optional<Transaction> optional = transactionRepository.findById(1L);
-            optional.ifPresent(value -> transaction = value);
-        }
-        if (transaction.getClusterId() != null && ClusterDTO.getClustersCount() == 0) {
-            recoveryData();
-        }
-        while (true) {
-            transaction.setClusterId(algorithmCLOPE.putTransactionInCluster(mapToDTO(transaction), repulsion));
-            transactionRepository.save(transaction);
-            Optional<Transaction> optional = transactionRepository.findById(transaction.getId() + 1);
-            if (optional.isPresent() && !stoppedByUser) {
-                transaction = optional.get();
-            } else {
-                transaction = null;
-                break;
-            }
-        }
+        initialization(repulsion, PAGE_SIZE);
     }
 
-//    public void initialization(double repulsion) {
-//        int pageNumber = 0;
-//        while (true) {
-//            Pageable pageable = PageRequest.of(pageNumber, PAGE_SIZE);
-//            List<Transaction> transactionList = transactionRepository.findTransactions(pageable).getContent();
-//            if (transactionList.isEmpty() || stoppedByUser) break;
-//            for (Transaction transaction : transactionList) {
-//                transaction.setClusterId(algorithmCLOPE.putTransactionInCluster(mapToDTO(transaction), repulsion));
-//            }
-//            transactionRepository.saveAll(transactionList);
-//            pageNumber++;
-//        }
-//    }
+    public void initialization(double repulsion, double pageSize) {
+        int pageNumber = 0;
+        ForkJoinPool forkJoinPool = new ForkJoinPool();
+        while (true) {
+            Pageable pageable = PageRequest.of(pageNumber, (int) pageSize);
+            List<Transaction> transactionList = transactionRepository.findTransactions(pageable).getContent();
+            if (transactionList.isEmpty() || stoppedByUser) break;
+            forkJoinPool.execute(() -> {
+                for (Transaction transaction : transactionList) {
+                    transaction.setClusterId(algorithmCLOPE.putTransactionInCluster(mapToDTO(transaction), repulsion));
+                }
+                transactionRepository.saveAll(transactionList);
+            });
+            pageNumber++;
+        }
+        forkJoinPool.shutdown();
+        try {
+            forkJoinPool.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
     public void iteration(double repulsion, double calculationError) {
         double lastGlobalProfit;
         double newGlobalProfit;
+        int i = 1;
         do {
             lastGlobalProfit = algorithmCLOPE.calculateGlobalProfit(repulsion);
-            initialization(repulsion);
+            initialization(repulsion, ((double) PAGE_SIZE / i));
             newGlobalProfit = algorithmCLOPE.calculateGlobalProfit(repulsion);
-            System.out.println("lastGlobalProfit " + lastGlobalProfit);
-            System.out.println("newGlobalProfit " + newGlobalProfit);
+            System.out.println("last global profit " + lastGlobalProfit);
+            System.out.println("new global profit  " + newGlobalProfit);
+            i++;
         }
         while ((newGlobalProfit - lastGlobalProfit) > calculationError);
+    }
+
+    private TransactionDTO mapToDTO(Transaction transaction) {
+        List<ElementDTO> elementDTOList = new ArrayList<>();
+        String[] elements = transaction.getElements().split(",");
+        for (int i = 0; i < elements.length; i++) {
+            if (!elements[i].equals("?")) {
+                elementDTOList.add(ElementDTO.findElementDTO(i, elements[i]));
+            } else {
+                elementDTOList.add(null);
+            }
+        }
+        TransactionDTO transactionDTO = new TransactionDTO();
+        transactionDTO.setId(transaction.getId());
+        transactionDTO.setClusterId(transaction.getClusterId());
+        transactionDTO.setElementDTOList(elementDTOList);
+        return transactionDTO;
     }
 
     public void recoveryData() {
@@ -95,17 +107,20 @@ public class TransactionService {
     public void clear() {
         transactionRepository.clearClusterIdValues();
         ClusterDTO.setClustersCount(0);
-        ClusterDTO.setClusterDTOS(new HashSet<>());
+        ClusterDTO.setClusterDTOS(new ConcurrentSkipListSet<>());
+    }
+
+    public void clearAll() {
+        transactionRepository.deleteAll();
+        ClusterDTO.setClustersCount(0);
+        ClusterDTO.setClusterDTOS(new ConcurrentSkipListSet<>());
     }
 
     public void printClusterInformation(int elementIndex) {
         if (ClusterDTO.getClustersCount() == 0) {
             recoveryData();
         }
-
-        //TODO delete
         AtomicInteger count = new AtomicInteger();
-
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(System.lineSeparator());
         List<ClusterDTO> set = new ArrayList<>(ClusterDTO.getClusterDTOS().stream().toList());
@@ -137,24 +152,7 @@ public class TransactionService {
             }
         });
         stringBuilder.append(System.lineSeparator());
-        stringBuilder.append("Transactions count ").append(count.get());
+        stringBuilder.append("Transactions count ").append(count.get()).append(System.lineSeparator());
         System.out.println(stringBuilder);
-    }
-
-    private TransactionDTO mapToDTO(Transaction transaction) {
-        List<ElementDTO> elementDTOList = new ArrayList<>();
-        String[] elements = transaction.getElements().split(",");
-        for (int i = 0; i < elements.length; i++) {
-            if (!elements[i].equals("?")) {
-                elementDTOList.add(ElementDTO.findElementDTO(i, elements[i]));
-            } else {
-                elementDTOList.add(null);
-            }
-        }
-        TransactionDTO transactionDTO = new TransactionDTO();
-        transactionDTO.setId(transaction.getId());
-        transactionDTO.setClusterId(transaction.getClusterId());
-        transactionDTO.setElementDTOList(elementDTOList);
-        return transactionDTO;
     }
 }
